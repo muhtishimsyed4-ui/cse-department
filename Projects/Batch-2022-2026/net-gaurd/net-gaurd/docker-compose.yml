@@ -1,0 +1,34 @@
+services:
+  netguard:
+    build: .
+    container_name: netguard
+    restart: unless-stopped
+
+    # ── CRITICAL: host networking gives arp-scan direct LAN access ──
+    # On Linux this works perfectly.
+    # On Windows Docker Desktop: see README — requires WSL2 native Docker.
+    network_mode: host
+
+    # Raw packet access required for arp-scan and nmap
+    privileged: true
+
+    # Persist the SQLite database across container restarts
+    volumes:
+      - netguard_db:/data
+
+    # Load credentials from .env file (copy .env.example → .env and fill in)
+    env_file:
+      - path: .env
+        required: false   # app still starts without .env (uses config.py defaults)
+
+    environment:
+      # Store DB in the persistent volume, not inside the container layer
+      - DATABASE_PATH=/data/netguard.db
+      # Set this to your actual network interface (eth0, wlan0, ens33, etc.)
+      # Run: ip link show    — to find yours
+      - NETWORK_INTERFACE=eth0
+
+# Named volume — data survives container rebuilds
+volumes:
+  netguard_db:
+    driver: local

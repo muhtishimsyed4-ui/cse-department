@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NetGuard — Network Monitor</title>
+
+  <!-- Bootstrap 5 -->
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+        crossorigin="anonymous" />
+
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     NAVBAR
+═══════════════════════════════════════════════════════════════ -->
+<nav class="navbar navbar-dark bg-primary px-3 py-2">
+  <span class="navbar-brand fw-bold fs-5 d-flex align-items-center gap-2">
+    <i class="bi bi-shield-lock-fill"></i> NetGuard
+  </span>
+  <div class="d-flex align-items-center gap-3">
+    <span id="schedulerPill" class="badge rounded-pill bg-secondary">
+      <i class="bi bi-clock"></i> <span id="schedulerPillText">—</span>
+    </span>
+    <button id="btnScan" class="btn btn-sm btn-light fw-semibold" onclick="triggerScan()">
+      <i class="bi bi-wifi"></i> Scan Now
+    </button>
+    <small class="text-white-50">Last scan: <span id="lastScanTime">—</span></small>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     STATS BAR
+═══════════════════════════════════════════════════════════════ -->
+<div class="stats-bar container-fluid py-3">
+  <div class="row g-3">
+    <div class="col-6 col-md-3 col-lg-2">
+      <div class="stat-card text-center p-3">
+        <div class="stat-value text-primary" id="statTotal">—</div>
+        <div class="stat-label">Total Devices</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3 col-lg-2">
+      <div class="stat-card text-center p-3">
+        <div class="stat-value text-success" id="statOnline">—</div>
+        <div class="stat-label">Online</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3 col-lg-2">
+      <div class="stat-card text-center p-3">
+        <div class="stat-value text-secondary" id="statOffline">—</div>
+        <div class="stat-label">Offline</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3 col-lg-2">
+      <div class="stat-card text-center p-3">
+        <div class="stat-value text-danger" id="statHigh">—</div>
+        <div class="stat-label">High Risk</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3 col-lg-2">
+      <div class="stat-card text-center p-3">
+        <div class="stat-value text-warning" id="statMedium">—</div>
+        <div class="stat-label">Medium Risk</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3 col-lg-2">
+      <div class="stat-card text-center p-3">
+        <div class="stat-value text-info" id="statLow">—</div>
+        <div class="stat-label">Low Risk</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     MAIN CONTENT
+═══════════════════════════════════════════════════════════════ -->
+<div class="container-fluid py-3">
+  <div class="row g-3">
+
+    <!-- LEFT: device table -->
+    <div class="col-12 col-lg-8">
+      <!-- toolbar -->
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <div class="input-group input-group-sm flex-grow-1" style="max-width:320px">
+          <span class="input-group-text bg-white border-end-0">
+            <i class="bi bi-search text-muted"></i>
+          </span>
+          <input id="searchInput" type="text" class="form-control border-start-0 ps-0"
+                 placeholder="Search IP, MAC, vendor…" oninput="applyFilters()" />
+        </div>
+        <select id="filterRisk" class="form-select form-select-sm w-auto" onchange="applyFilters()">
+          <option value="">All Risks</option>
+          <option value="high">🔴 High</option>
+          <option value="medium">🟡 Medium</option>
+          <option value="low">🟢 Low</option>
+        </select>
+        <select id="filterStatus" class="form-select form-select-sm w-auto" onchange="applyFilters()">
+          <option value="">All Status</option>
+          <option value="online">Online</option>
+          <option value="offline">Offline</option>
+          <option value="new">New</option>
+          <option value="known">Known</option>
+        </select>
+        <button class="btn btn-sm btn-outline-secondary" onclick="clearFilters()" title="Clear filters">
+          <i class="bi bi-x-circle"></i>
+        </button>
+        <span id="deviceCount" class="ms-auto text-muted small"></span>
+      </div>
+
+      <!-- table -->
+      <div class="table-responsive rounded border">
+        <table class="table table-hover align-middle mb-0" id="deviceTable">
+          <thead class="table-light">
+            <tr>
+              <th style="width:34px"></th>
+              <th class="sortable" data-col="ip_address">IP <i class="bi bi-arrow-down-up text-muted small"></i></th>
+              <th class="sortable" data-col="mac_address">MAC <i class="bi bi-arrow-down-up text-muted small"></i></th>
+              <th class="sortable" data-col="vendor">Vendor <i class="bi bi-arrow-down-up text-muted small"></i></th>
+              <th>Hostname</th>
+              <th class="sortable" data-col="risk_level">Risk <i class="bi bi-arrow-down-up text-muted small"></i></th>
+              <th>Status</th>
+              <th>Last Seen</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="deviceTableBody">
+            <tr><td colspan="9" class="text-center py-4 text-muted">
+              <i class="bi bi-hourglass-split me-1"></i> Loading…
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- RIGHT: sidebar -->
+    <div class="col-12 col-lg-4 d-flex flex-column gap-3">
+
+      <!-- Scan History -->
+      <div class="card shadow-sm">
+        <div class="card-header d-flex align-items-center justify-content-between py-2">
+          <span class="fw-semibold"><i class="bi bi-clock-history me-1"></i>Scan History</span>
+          <button class="btn btn-sm btn-link p-0 text-muted" onclick="fetchHistory()">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+        </div>
+        <ul class="list-group list-group-flush" id="scanHistoryList">
+          <li class="list-group-item text-muted small">Loading…</li>
+        </ul>
+      </div>
+
+      <!-- Scheduler -->
+      <div class="card shadow-sm">
+        <div class="card-header py-2 fw-semibold">
+          <i class="bi bi-gear-fill me-1"></i> Auto-Scan Scheduler
+        </div>
+        <div class="card-body py-3">
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted small">Status</span>
+            <span id="schedulerStatus" class="badge bg-secondary">—</span>
+          </div>
+          <div class="d-flex justify-content-between mb-3">
+            <span class="text-muted small">Next run</span>
+            <span id="schedulerNext" class="small fw-semibold">—</span>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-warning flex-fill" onclick="pauseScheduler()">
+              <i class="bi bi-pause-fill"></i> Pause
+            </button>
+            <button class="btn btn-sm btn-outline-success flex-fill" onclick="resumeScheduler()">
+              <i class="bi bi-play-fill"></i> Resume
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- High Risk quick list -->
+      <div class="card shadow-sm border-danger">
+        <div class="card-header py-2 fw-semibold text-danger">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i> High Risk Devices
+        </div>
+        <ul class="list-group list-group-flush" id="highRiskList">
+          <li class="list-group-item text-muted small">No high-risk devices</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     DEVICE DETAIL MODAL
+═══════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="deviceModal" tabindex="-1" aria-labelledby="deviceModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title d-flex align-items-center gap-2" id="deviceModalLabel">
+          <span id="modalRiskDot" class="risk-dot risk-dot-low"></span>
+          <span id="modalTitle">Device Details</span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <table class="table table-sm table-borderless mb-0">
+              <tbody id="modalInfoTable"></tbody>
+            </table>
+          </div>
+          <div class="col-md-6">
+            <h6 class="text-muted small text-uppercase fw-semibold mb-2">Open Ports</h6>
+            <div id="modalPorts" class="mb-3 font-monospace small">—</div>
+            <h6 class="text-muted small text-uppercase fw-semibold mb-2">Vulnerabilities</h6>
+            <div id="modalVulns" class="small text-danger-emphasis"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer flex-wrap gap-2">
+        <div class="input-group input-group-sm" style="max-width:220px">
+          <input type="text" id="renameInput" class="form-control" placeholder="Custom name…" maxlength="64" />
+          <button class="btn btn-outline-primary" onclick="renameDevice()">
+            <i class="bi bi-pencil"></i> Rename
+          </button>
+        </div>
+        <button id="btnModalApprove" class="btn btn-sm btn-outline-success" onclick="approveDevice()">
+          <i class="bi bi-check-circle"></i> Approve
+        </button>
+        <button class="btn btn-sm btn-outline-info" onclick="securityScan()">
+          <i class="bi bi-shield-check"></i> Security Scan
+        </button>
+        <button class="btn btn-sm btn-outline-danger ms-auto" onclick="deleteDevice()">
+          <i class="bi bi-trash3"></i> Delete
+        </button>
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SCAN SPINNER OVERLAY
+═══════════════════════════════════════════════════════════════ -->
+<div id="scanOverlay" class="scan-overlay d-none">
+  <div class="text-center text-white">
+    <div class="spinner-border mb-3" style="width:3rem;height:3rem;"></div>
+    <div class="fs-5 fw-semibold">Scanning Network…</div>
+    <div class="small opacity-75 mt-1">This may take a few seconds</div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+        crossorigin="anonymous"></script>
+
+<!-- NetGuard JS -->
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
